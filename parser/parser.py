@@ -2,7 +2,7 @@ import httpx
 from bs4 import BeautifulSoup
 from sqlmodel import Session
 
-from db.model import product_exists, save_product
+from db.model import product_exists, save_product, Product
 
 
 async def parser_products(url, session: Session):
@@ -34,6 +34,8 @@ async def parser_products(url, session: Session):
 
             # Извлекаем все товары на текущей странице
             items = soup.find_all('article', class_='l-product')
+            parsed_products = []
+
             for item in items:
                 # Извлекаем название товара
                 name_tag = item.find('span', itemprop='name')
@@ -46,9 +48,13 @@ async def parser_products(url, session: Session):
                 # Проверка на дублирование в БД перед добавлением
                 if not product_exists(session, category, name, price):
                     # Сохраняем новый продукт
-                    save_product(session, category, name, price)
+                    product = Product(category=category, name=name, price=price)
+                    parsed_products.append(product)
                 else:
                     print(f"Skipping duplicate product: {name} - {price}")
+
+            if parsed_products:
+                save_product(session, parsed_products)
 
             # Переход к следующей странице, если она существует
             next_page = soup.select_one('#navigation_2_next_page[href]')

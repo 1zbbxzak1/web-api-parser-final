@@ -1,5 +1,6 @@
 from typing import Optional
 
+from sqlalchemy.exc import IntegrityError
 from sqlmodel import SQLModel, Field, create_engine, Session, select
 
 
@@ -55,19 +56,17 @@ def product_exists(session: Session, category: str, name: str, price: float) -> 
     return result is not None
 
 
-def save_product(session: Session, category: str, name: str, price: float):
+def save_product(session: Session, products: list[Product]):
     """
-    Сохраняет новый продукт в базе данных.
+    Сохраняет список продуктов в базу данных одной транзакцией.
 
     Аргументы:
-        session (Session): Сессия SQLAlchemy, через которую осуществляется взаимодействие с базой данных.
-        category (str): Категория продукта.
-        name (str): Название продукта.
-        price (float): Цена продукта.
+        session (Session): Сессия SQLAlchemy для взаимодействия с базой данных.
+        products (list[Product]): Список объектов Product для добавления.
     """
-    product = Product(category=category, name=name, price=price)
-    session.add(product)
-    session.commit()
-    session.refresh(product)
-
-    return product
+    try:
+        session.add_all(products)  # Пакетное добавление объектов
+        session.commit()  # Один вызов commit() для всей транзакции
+    except IntegrityError:
+        session.rollback()  # Откат транзакции в случае ошибки
+        print("Duplicate entries detected, skipping...")
