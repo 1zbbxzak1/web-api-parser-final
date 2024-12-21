@@ -1,26 +1,30 @@
 import asyncio
 
-from fastapi import FastAPI, HTTPException
-from pydantic import BaseModel
+from fastapi import FastAPI, WebSocket, WebSocketDisconnect, HTTPException
 from sqlmodel import Session, select
 
+from connection.connection_service import ConnectionManager
 from db.model import create_table, engine, Product, save_product
+from models.parse_request_model import ParseRequest
 from parser.parser import parser_products
-
-app = FastAPI()
 
 # Глобальная переменная для хранения текущего URL
 current_url = "https://www.maxidom.ru/catalog/svarochnoe-oborudovanie/"
 
+app = FastAPI()
 
-class ParseRequest(BaseModel):
-    """
-    Модель данных для запроса на парсинг, содержащая URL для парсинга.
+manager = ConnectionManager()
 
-    Атрибуты:
-        url (str): URL страницы для парсинга.
-    """
-    url: str
+
+# WebSocket маршрут
+@app.websocket("/ws")
+async def websocket_endpoint(websocket: WebSocket):
+    await manager.connect(websocket)
+    try:
+        while True:
+            await websocket.receive_text()
+    except WebSocketDisconnect:
+        manager.disconnect(websocket)
 
 
 @app.on_event("startup")
@@ -112,6 +116,9 @@ async def add_product(category: str, name: str, price: float):
     """
     with Session(engine) as session:
         product = save_product(session, category, name, price)
+
+        await manager.broadcast(f"Product added: {product.name}, ${product.price}")
+
     return {"message": "Product added successfully", "product": product}
 
 
@@ -151,7 +158,9 @@ async def update_product(product_id: int, category: str = None, name: str = None
         session.commit()
         session.refresh(product)
 
-    return {"message": f"Product with id {product_id} updated successfully", "product": product}
+        await manager.broadcast(f"Product updated: {product.name}, {product.price} ₽")
+
+    return {"message": f"Product updated successfully", "product": product}
 
 
 @app.delete("/products/{product_id}")
@@ -180,4 +189,6 @@ async def delete_product(product_id: int):
         session.delete(product)
         session.commit()
 
-    return {"message": f"Product with id {product_id} deleted successfully"}
+        await manager.broadcast(f"Product deleted: id {product_id}")
+
+    return {"message": f"Product deleted successfully"}
