@@ -1,4 +1,4 @@
-# web-api-parser
+# web-api-parser-final
 
 Это FastAPI-приложение для парсинга товаров с веб-страницы и сохранения их в базе данных. Приложение использует SQLModel
 для работы с базой данных и httpx + BeautifulSoup для парсинга HTML. Оно поддерживает автоматический парсинг товаров с
@@ -122,6 +122,40 @@
       }
     }
     ```
+
+## Проверка WebSocket
+
+### Запуск в консоли разработчика
+
+```javascript
+    const socket = new WebSocket("ws://127.0.0.1:8000/ws");
+
+socket.onopen = () => {
+    console.log("WebSocket connection opened");
+};
+
+socket.onmessage = (event) => {
+    console.log("Message from server:", event.data);
+};
+
+socket.onclose = () => {
+    console.log("WebSocket connection closed");
+};
+```
+
+### Запуск с помощью wscat
+
+1. Установить wscat с помощью npm:
+
+```bash
+npm install -g wscat
+```
+
+2. Подключиться к WebSocket серверу:
+
+```bash
+wscat -c ws://127.0.0.1:8000/ws
+```
 
 ## Периодический парсинг
 
