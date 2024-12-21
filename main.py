@@ -53,7 +53,7 @@ async def run_periodic_parsing():
 
 
 @app.post("/set_url")
-def set_url(url: str):
+async def set_url(url: str):
     """
     Эндпоинт для изменения URL, который будет использоваться для периодического парсинга.
 
@@ -87,7 +87,7 @@ async def parse_and_save_products(request: ParseRequest):
 
 
 @app.get("/products")
-def get_all():
+async def get_all():
     """
     Эндпоинт для получения списка всех продуктов из базы данных.
 
@@ -96,6 +96,8 @@ def get_all():
     """
     with Session(engine) as session:
         products = session.exec(select(Product)).all()
+
+        await manager.broadcast(f"Gt all products successfully")
 
     return {"products": products}
 
