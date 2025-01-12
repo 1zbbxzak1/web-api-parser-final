@@ -24,7 +24,7 @@ class Product(SQLModel, table=True):
 DATABASE_URL = "sqlite:///./products.db"
 
 # Создание объекта подключения к базе данных
-engine = create_engine(DATABASE_URL, echo=True)
+engine = create_engine(DATABASE_URL, echo=False)
 
 
 def create_table():
@@ -65,8 +65,8 @@ def save_product(session: Session, products: list[Product]):
         products (list[Product]): Список объектов Product для добавления.
     """
     try:
-        session.add_all(products)  # Пакетное добавление объектов
-        session.commit()  # Один вызов commit() для всей транзакции
+        session.add_all(products)
+        session.commit()
     except IntegrityError:
-        session.rollback()  # Откат транзакции в случае ошибки
+        session.rollback()
         print("Duplicate entries detected, skipping...")

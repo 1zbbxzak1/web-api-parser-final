@@ -4,7 +4,7 @@ from fastapi import FastAPI, WebSocket, WebSocketDisconnect, HTTPException
 from sqlmodel import Session, select
 
 from connection.connection_service import ConnectionManager
-from db.model import create_table, engine, Product, save_product
+from db.model import create_table, engine, Product, save_product, product_exists
 from models.parse_request_model import ParseRequest
 from parser.parser import parser_products
 
@@ -46,7 +46,7 @@ async def run_periodic_parsing():
     while True:
         await parse_and_save_products(ParseRequest(url=current_url))
 
-        print("Parsing done. Waiting for 12 hours before next run.")
+        print("Парсинг закончен. Следующий запрос будет через 12 часов.")
 
         # Пауза на 12 часов перед следующим запуском парсинга
         await asyncio.sleep(12 * 60 * 60)
@@ -66,7 +66,7 @@ async def set_url(url: str):
     global current_url
     current_url = url
 
-    return {"message": f"URL for parsing updated to: {current_url}"}
+    return {"message": f"URL для парсинга обновлен на: {current_url}"}
 
 
 @app.post("/parse")
@@ -83,7 +83,7 @@ async def parse_and_save_products(request: ParseRequest):
     with Session(engine) as session:
         await parser_products(request.url, session)
 
-    return {"message": "Products parsed and saved successfully"}
+    return {"message": "Парсинг завершен и данные сохранены в базу данных."}
 
 
 @app.get("/products")
@@ -97,9 +97,24 @@ async def get_all():
     with Session(engine) as session:
         products = session.exec(select(Product)).all()
 
-        await manager.broadcast(f"Gt all products successfully")
+        await manager.broadcast(f"Все продукты получены")
 
     return {"products": products}
+
+
+@app.get("/products/{product_id}")
+async def get_product(product_id: int):
+    """
+    Эндпоинт для получения продукта по id из базы данных.
+
+    Возвращаемое значение:
+        product (Product): Продукт, хранящихся в базе данных.
+    """
+    with Session(engine) as session:
+        product = session.get(Product, product_id)
+        await manager.broadcast(f"Получен продукт по id {product_id}")
+
+    return {"product": product}
 
 
 @app.post("/products")
@@ -117,11 +132,24 @@ async def add_product(category: str, name: str, price: float):
         product (Product): Добавленный продукт.
     """
     with Session(engine) as session:
-        product = save_product(session, category, name, price)
+        # Проверка на существование продукта
+        if product_exists(session, category, name, price):
+            raise HTTPException(status_code=400, detail="Product already exists")
 
-        await manager.broadcast(f"Product added: {product.name}, ${product.price}")
+        # Создание объекта продукта
+        new_product = Product(category=category, name=name, price=price)
 
-    return {"message": "Product added successfully", "product": product}
+        try:
+            save_product(session, [new_product])
+
+            # Сообщение об успешном добавлении
+            await manager.broadcast(
+                f"Добавлен продукт: {new_product.category}, {new_product.name}, ${new_product.price}")
+
+            return {"message": "Продукт успешно добавлен", "product": new_product}
+
+        except Exception as e:
+            raise HTTPException(status_code=500, detail=f"An error occurred: {str(e)}")
 
 
 @app.put("/products/{product_id}")
@@ -160,9 +188,9 @@ async def update_product(product_id: int, category: str = None, name: str = None
         session.commit()
         session.refresh(product)
 
-        await manager.broadcast(f"Product updated: {product.name}, {product.price} ₽")
+        await manager.broadcast(f"Обновлен продукт: {product.category}, {product.name}, {product.price} ₽")
 
-    return {"message": f"Product updated successfully", "product": product}
+    return {"message": f"Продукт успешно обновлен", "product": product}
 
 
 @app.delete("/products/{product_id}")
@@ -191,6 +219,6 @@ async def delete_product(product_id: int):
         session.delete(product)
         session.commit()
 
-        await manager.broadcast(f"Product deleted: id {product_id}")
+        await manager.broadcast(f"Удален продукт с id {product_id}")
 
-    return {"message": f"Product deleted successfully"}
+    return {"message": f"Продукт успешно удален"}
