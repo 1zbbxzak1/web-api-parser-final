@@ -53,6 +53,7 @@ def product_exists(session: Session, category: str, name: str, price: float) -> 
     """
     statement = select(Product).where(Product.category == category, Product.name == name, Product.price == price)
     result = session.exec(statement).first()
+
     return result is not None
 
 
